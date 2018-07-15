@@ -18,11 +18,6 @@
 #include "esp_log.h"
 #include "ttft.h"
 
-static const int SPIFrequency = 40 * 1000000;
-static const int MOSIPin = 23;
-static const int MISOPin = 19;
-static const int SCLKPin = 18;
-
 static void IRAM_ATTR SwapInt( int* A, int* B );
 static void IRAM_ATTR TTFT_PreTransferCallback( spi_transaction_t* Transaction );
 static void TTFT_SetAddressWindow( struct TTFT_Device* DeviceHandle, int x0, int y0, int x1, int y1 );
@@ -60,9 +55,9 @@ static void IRAM_ATTR TTFT_PreTransferCallback( spi_transaction_t* Transaction )
 
 /*
  * SPIMasterInit:
- * Initializes the SPI bus with default values.
+ * Initializes the SPI bus with the given pins.
  */
-bool SPIMasterInit( void ) {
+bool SPIMasterInit( int MOSIPin, int MISOPin, int SCLKPin ) {
     const spi_bus_config_t SPIBusConfig = {
         .mosi_io_num = MOSIPin,
         .miso_io_num = MISOPin,
@@ -89,8 +84,10 @@ bool SPIMasterInit( void ) {
  * CSPin:           Can be held low if nothing else will be on the SPI bus
  * ResetPin:        Can be held high to skip hardware reset, TTFT_Reset will still reset the device in software.
  * BacklightPin:    Can be held high to be always on or if you're going to manage it yourself.
+ * ResetProc:       Pointer to device specific reset function which should send commands needed to initialize the display.
+ * SPIFrequency:    Frequency in Hz to drive the SPI display at.
  */
-bool TTFT_Init( struct TTFT_Device* DeviceHandle, int Width, int Height, int CSPin, int DCPin, int ResetPin, int BacklightPin, void ( *ResetProc ) ( struct TTFT_Device* ) ) {
+bool TTFT_Init( struct TTFT_Device* DeviceHandle, int Width, int Height, int CSPin, int DCPin, int ResetPin, int BacklightPin, void ( *ResetProc ) ( struct TTFT_Device* ), int SPIFrequency ) {
     int Size = ( Width * Height );
 
     const spi_device_interface_config_t SPIDeviceConfig = {
@@ -106,6 +103,7 @@ bool TTFT_Init( struct TTFT_Device* DeviceHandle, int Width, int Height, int CSP
     };
 
     NullCheck( DeviceHandle, return false );
+    NullCheck( ResetProc, return false );
 
     if ( DCPin == -1 ) {
         ESP_LOGE( __FUNCTION__, "Need a D/C pin to function properly!" );
@@ -144,8 +142,6 @@ bool TTFT_Init( struct TTFT_Device* DeviceHandle, int Width, int Height, int CSP
 
     ESP_ERROR_CHECK_NONFATAL( gpio_config( &IOOutputs ), return false );
     ESP_ERROR_CHECK_NONFATAL( spi_bus_add_device( VSPI_HOST, &SPIDeviceConfig, &DeviceHandle->Handle ), return false );
-    
-    //TTFT_Reset_ILI9341( DeviceHandle );
 
     ResetProc( DeviceHandle );
 
@@ -181,6 +177,10 @@ void TTFT_SetBacklight( struct TTFT_Device* DeviceHandle, bool On ) {
     }
 }
 
+/*
+ * TTFT_Reset_ST7735:
+ * Reset and init sequence for the ST7735 display controller.
+ */
 void TTFT_Reset_ST7735( struct TTFT_Device* DeviceHandle ) {
     NullCheck( DeviceHandle, return );
 
@@ -255,9 +255,8 @@ void TTFT_Reset_ST7735( struct TTFT_Device* DeviceHandle ) {
 }
 
 /*
- * TTFT_Reset:
- * First does a hardware reset (if pin configured), then a software reset,
- * then it does all of the necessary initialization commands to enable the display.
+ * TTFT_Reset_ILI9341:
+ * Reset and init sequency for the ST7735 display controller.
  */
 void TTFT_Reset_ILI9341( struct TTFT_Device* DeviceHandle ) {
     NullCheck( DeviceHandle, return );
@@ -744,6 +743,10 @@ void TTFT_SPIWrite( struct TTFT_Device* DeviceHandle, const uint8_t* Data, size_
     }
 }
 
+/* 
+ * Number of scanlines to send at a time.
+ * More lines is faster (to a point) but take more memory.
+ */
 #define LineUpdateCount 4
 
 /*

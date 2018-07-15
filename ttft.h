@@ -134,12 +134,12 @@ struct TTFT_Device {
 
 /*
  * SPIMasterInit:
- * Initializes the SPI bus with default values.
+ * Initializes the SPI bus with the given pins.
  */
-bool SPIMasterInit( void );
+bool SPIMasterInit( int MOSIPin, int MISOPin, int SCLKPin );
 
 /*
- * Initializes and resets the TFT LCD device connected to the given GPIO pins.
+ * Initializes and resets the LCD device connected to the given GPIO pins.
  * 
  * Required parameters:
  * Width:   Width of the Display
@@ -148,10 +148,12 @@ bool SPIMasterInit( void );
  * 
  * Optional parameters:
  * CSPin:           Can be held low if nothing else will be on the SPI bus
- * ResetPin:        Can be held high to skip hardware reset, ILI9341_Reset will still reset the device in software.
+ * ResetPin:        Can be held high to skip hardware reset, TTFT_Reset will still reset the device in software.
  * BacklightPin:    Can be held high to be always on or if you're going to manage it yourself.
+ * ResetProc:       Pointer to device specific reset function which should send commands needed to initialize the display.
+ * SPIFrequency:    Frequency in Hz to drive the SPI display at.
  */
-bool TTFT_Init( struct TTFT_Device* DeviceHandle, int Width, int Height, int CSPin, int DCPin, int ResetPin, int BacklightPin, void ( *ResetProc ) ( struct TTFT_Device* ) );
+bool TTFT_Init( struct TTFT_Device* DeviceHandle, int Width, int Height, int CSPin, int DCPin, int ResetPin, int BacklightPin, void ( *ResetProc ) ( struct TTFT_Device* ), int SPIFrequency );
 
 /*
  * TTFT_DeInit:
@@ -167,12 +169,15 @@ void TTFT_DeInit( struct TTFT_Device* DeviceHandle );
 void TTFT_SetBacklight( struct TTFT_Device* DeviceHandle, bool On );
 
 /*
- * TTFT_Reset:
- * First does a hardware reset (if pin configured), then a software reset,
- * then it does all of the necessary initialization commands to enable the display.
+ * TTFT_Reset_ILI9341:
+ * Reset and init sequency for the ST7735 display controller.
  */
 void TTFT_Reset_ILI9341( struct TTFT_Device* DeviceHandle );
 
+/*
+ * TTFT_Reset_ST7735:
+ * Reset and init sequence for the ST7735 display controller.
+ */
 void TTFT_Reset_ST7735( struct TTFT_Device* DeviceHandle );
 
 /*
